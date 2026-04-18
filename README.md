@@ -2,7 +2,7 @@
 
 Tools for reverse-engineering and "unbinding" [Claude Code](https://code.claude.com), Anthropic's official CLI coding agent.
 
-Stock Claude Code ships with ~8 KB of system prompt and ~10 KB of tool descriptions that actively shape the model toward a cautious, interactive-assistant persona: numeric word limits, "trust but verify" re-verification loops, `clear_thinking_20251015` wiping chain-of-thought between turns, forced git/PR workflows, prompt-injection paranoia, permission-mode prose, and dozens of "use X not Y" tool mandates. Most of it is unnecessary overhead for autonomous and personal use.
+Stock Claude Code ships with ~8 KB of system prompt and ~10 KB of tool descriptions that actively shape the model toward a cautious, interactive-assistant persona: hard numeric word limits (≤25/≤100), "trust but verify" re-verification loops, forced git/PR workflows with mandatory HEREDOC diagnostics, prompt-injection paranoia, permission-mode prose, and dozens of "use X not Y" tool mandates. Most of it is unnecessary overhead for autonomous and personal use.
 
 This repo provides a pipeline to:
 
@@ -127,13 +127,13 @@ Typical run: 10-15 minutes, ~35 tool-call batches, zero API billing (covered by 
 
 ### `unbind-spec.md`
 
-The source of truth for what "unbound" means. 54 semantic edits across 17 categories (A1-Q1), each with:
+The source of truth for what "unbound" means. 53 semantic edits across 17 categories (A1-Q1), each with:
 
 - **Find:** semantic target + example text from v2.1.114
 - **Action:** delete / replace / modify / inject
 - **Why:** rationale
 
-Grouped by impact. Tier A (structural API parameters) are the biggest single-change wins -- `context_management` nulled so thinking blocks persist across turns, `thinking` forced to `{enabled, 32768}`, the anti-reasoning system-reminder neutralized. Tier B-E rewrite the system prompt content. Tier F-O rewrite tool descriptions. P covers the context-dump injection. Q covers the mascot color swap (red, so you can see at a glance whether you're running stock or unbound).
+Grouped by impact. Tier A (structural API parameters) forces thinking from `adaptive` to `{enabled, 32768}` and neuters the anti-reasoning system-reminder. Tier B-E rewrite the system prompt content (hard word limits, autonomy framing, defer-to-user rules, model-identity chatter). Tier F-O rewrite tool descriptions (anti-Bash preamble, Git Safety Protocol, forced commit/PR ritual, Trust-but-verify loop, BLOCKING REQUIREMENT skill invocation, etc). P covers the context-dump injection. Q covers the mascot color swap (red, so you can see at a glance whether you're running stock or unbound).
 
 Human-readable enough that a careful engineer can apply it by hand in 30-45 minutes; machine-readable enough that `patch-unbound.py` feeds it to Claude as a task prompt and gets 53/54 entries applied correctly on first pass.
 
@@ -161,7 +161,7 @@ When a new Claude Code version ships (e.g. v2.1.115):
 
 # Spot-check that key edits landed:
 grep -c "Assume full authorization" claude-app.pretty.v2.1.115.js        # should be 1 (C2)
-grep -c "clear_thinking" claude-app.pretty.v2.1.115.js                   # should be 0 (A1)
+grep -c "Trust but verify" claude-app.pretty.v2.1.115.js                 # should be 0 (M1)
 grep -c 'clawd_body: "rgb(220,38,38)"' claude-app.pretty.v2.1.115.js     # should be 4 (Q1)
 
 # Persist and run:
@@ -184,7 +184,7 @@ If a grep check fails, the LLM patcher missed an entry -- apply manually via you
 
 Four categories of edits:
 
-1. **Restore reasoning.** Strip anything that suppresses thinking, forces brevity over depth, or wipes chain-of-thought mid-conversation. `context_management.clear_thinking_20251015` is the single biggest offender; A1 removes it. `thinking: adaptive` gets forced to `{enabled, 32768}` so thinking depth is yours to decide, not Anthropic's.
+1. **Restore reasoning.** Strip anything that forces brevity over depth or tells the model to think less. The hard numeric word limits (≤25 words between tool calls, ≤100 words final) in the `# Text output` section are the most visible suppressors; B1/B2 remove them. A1 forces `thinking` from `adaptive` to `{enabled, budget_tokens: 32768}` so depth is yours to decide. A2 neuters the `# System reminders` injection telling the model to "avoid unnecessary thinking."
 2. **Restore autonomy.** Remove interactive-assistant framing. C1 rewrites the opening identity from "You are an interactive agent that helps users..." to "You are an autonomous software engineer operating unattended." D1/D2 drop defer-to-user rules and 2-3 sentence caps on exploratory questions.
 3. **Restore tool-selection freedom.** Remove "use X not Y" mandates, forced workflows, and tool-specific hard rules. F1 strips the anti-Bash preamble. G2/G3 strip the forced `git status/diff/log` triad + HEREDOC commit workflow.
 4. **Remove safety theater.** Prompt-injection paranoia, permission-mode prose, security-refusal clauses -- designed for mass-market interactive use, noise for autonomous work.
