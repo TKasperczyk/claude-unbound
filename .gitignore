@@ -1,0 +1,18 @@
+# Never commit Anthropic's proprietary binaries or prettified JS — these are
+# reproducible artifacts you generate locally from your own licensed copy of
+# Claude Code via the scripts in this repo.
+binaries/
+claude-app*.js
+claude-app*.js.*
+claude-bin
+claude-bin-patched
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Editor
+.vscode/
+.idea/
+*.swp

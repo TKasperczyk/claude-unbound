@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+# claude-unbound -- Launch the patched unbound Claude Code build.
+#
+# Runs claude-app.pretty.v<VERSION>.unbound.js via bun with
+# --dangerously-skip-permissions. When inside Kitty with remote control,
+# sets up the same tmux-shim machinery as claude-teams so agent teams
+# work. Outside Kitty (SSH, scripts, CI), degrades gracefully without
+# teams support.
+
+set -euo pipefail
+
+# Point this at your built .unbound.js archive. Override via CLAUDE_UNBOUND_JS
+# env var or by editing the default below. See the repo README for how to
+# produce one via the extract -> patch-context-dump -> patch-unbound pipeline.
+UNBOUND_JS="${CLAUDE_UNBOUND_JS:-$HOME/Programming/claude-unbound/claude-app.pretty.unbound.js}"
+
+if [[ ! -f "$UNBOUND_JS" ]]; then
+    echo "Error: unbound archive not found: $UNBOUND_JS" >&2
+    echo "Build one via the pipeline documented in the README, or set" >&2
+    echo "CLAUDE_UNBOUND_JS to an existing archive path." >&2
+    exit 1
+fi
+
+# Extra env to layer on top of the exec. Populated only when Kitty
+# supports the tmux shim.
+declare -a TEAMS_ENV=()
+
+if [[ -n "${KITTY_WINDOW_ID:-}" && -n "${KITTY_LISTEN_ON:-}" ]]; then
+    # Kitty detected with remote control: set up the tmux shim so CC's
+    # TmuxBackend activates and agent teams become available.
+    SHIM_DIR=$(mktemp -d /tmp/kitty-tmux-shim.XXXXXX)
+    ln -sf ~/.local/bin/kitty-tmux-shim "$SHIM_DIR/tmux"
+
+    STATE_FILE="/tmp/kitty-tmux-shim-${KITTY_WINDOW_ID}.panes"
+
+    cleanup() {
+        rm -rf "$SHIM_DIR"
+        rm -f "$STATE_FILE"
+    }
+    trap cleanup EXIT
+
+    export KITTY_TMUX_SHIM_LOG="${KITTY_TMUX_SHIM_DEBUG:+/tmp/kitty-tmux-shim.log}"
+
+    # Tell CC we're "inside tmux"
+    export TMUX="kitty-shim:$(date +%s),0"
+    export TMUX_PANE="%${KITTY_WINDOW_ID}"
+    export KITTY_TMUX_SHIM_LEADER="$KITTY_WINDOW_ID"
+
+    # Put shim first in PATH so it shadows the real tmux
+    export PATH="${SHIM_DIR}:${PATH}"
+
+    TEAMS_ENV+=(CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1)
+fi
+
+exec env "${TEAMS_ENV[@]}" bun "$UNBOUND_JS" -- --dangerously-skip-permissions "$@"
