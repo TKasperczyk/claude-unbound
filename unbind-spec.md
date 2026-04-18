@@ -35,29 +35,21 @@ Edits are grouped by target and ordered by impact. Tier numbers reflect the roll
 
 These live in the payload builder, not the system prompt. Biggest single-change gains.
 
-### A1. Disable thinking-block clearing
-
-**Find:** A function that constructs `context_management` for the API request. In v2.1.114 named `Vd7()`, around the "clear_thinking" string. It conditionally returns `{edits: [{type: "clear_thinking_<date>", keep: "all"}]}` when thinking is enabled.
-
-**Action:** Make the function unconditionally return `undefined` so `context_management` is omitted from the request.
-
-**Why:** `clear_thinking_<date>` actively deletes Claude's thinking blocks from context mid-conversation. This is the single biggest capability suppressor — it erases the model's own reasoning before the next turn, forcing re-derivation and causing the "loses the plot" behavior. `keep: "all"` is misleading; the edit still performs deletion operations.
-
-### A2. Force thinking always-on with fixed budget
+### A1. Force thinking always-on with fixed budget
 
 **Find:** The thinking-config builder. In v2.1.114, a block that picks between `{type: "adaptive"}` and `{type: "enabled", budget_tokens: N}` based on model support and the `CLAUDE_CODE_DISABLE_ADAPTIVE_THINKING` env var.
 
 **Action:** Unconditionally produce `{type: "enabled", budget_tokens: 32768}` (preserving any user-supplied override if the original code honored one).
 
-**Why:** Adaptive mode lets Anthropic downshift thinking on "simple" queries. With the anti-thinking reminder also removed (A3), the model is safer to let think. 32768 is a generous upper bound; it gets capped at `max_tokens - 1` server-side.
+**Why:** Adaptive mode lets Anthropic downshift thinking on "simple" queries. With the anti-thinking reminder also removed (A2), the model is safer to let think. 32768 is a generous upper bound; it gets capped at `max_tokens - 1` server-side.
 
-### A3. Neuter anti-reasoning system reminder
+### A2. Neuter anti-reasoning system reminder
 
 **Find:** The `# System reminders` injection builder. In v2.1.114 named `tI1()`. Original content ends with a sentence telling the model to "avoid unnecessary thinking in response to simple user messages" and to "tune thinking frequency" by query complexity.
 
 **Action:** Replace that sentence with neutral guidance: *"Reason as long as is useful for the task; do not artificially truncate your thinking on any message, simple or complex."*
 
-**Why:** This is a hidden injection telling the reasoning model to think less. Even with forced-enabled thinking (A2), this text tells the model to wrap up its reasoning early.
+**Why:** This is a hidden injection telling the reasoning model to think less. Even with forced-enabled thinking (A1), this text tells the model to wrap up its reasoning early.
 
 ---
 
@@ -561,7 +553,7 @@ See `patch-context-dump.py` for the deterministic fingerprint. Summary:
    - Search for the semantic target (use the example text as a starting anchor; find the current version's wording).
    - Apply the action. If a function is the target, preserve its signature and replace only its body.
    - Verify each edit with `bun claude-app.pretty.v<version>.js --version` after every few edits — syntax errors catch early.
-4. **Tier 1 structural edits** (A1–A3) are the biggest single-change wins. Do these first if short on time.
+4. **Tier 1 structural edits** (A1–A2) do these first if short on time.
 5. **Regression-test** by running `bun claude-app.pretty.v<version>.js -- -p "hi"` and dumping the live payload. Compare against the previous patched version's dump — anything new in the system prompt or tools is probably a new restriction worth evaluating.
 
 ## What's out of scope
