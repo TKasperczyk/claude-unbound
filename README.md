@@ -43,7 +43,7 @@ The resulting patched archives are derivative works of proprietary software; use
 #   → every API request now dumps to /tmp/claude-context-v<version>/
 
 # 4. Apply the unbind spec via an LLM patcher
-#    (spawns Claude Code as a subprocess; uses your Max subscription; ~10-15 min)
+#    (spawns Claude Code as a subprocess; uses your Pro/Max subscription; ~10-15 min)
 ./patch-unbound.py claude-app.pretty.v2.1.114.js
 
 # 5. Persist as your launch artifact
