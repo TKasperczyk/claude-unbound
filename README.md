@@ -9,7 +9,7 @@ This repo provides a pipeline to:
 - Download any published version of the Claude Code binary from Anthropic's public GCS bucket
 - Extract and prettify the bundled JS
 - Inject a payload dumper so every API request is captured to disk for comparison
-- Apply a 54-entry [semantic spec](unbind-spec.md) that removes the behavioral micromanagement while preserving every useful capability (Opus 4.7 with adaptive thinking at 32k budget, full tool surface, agent teams support)
+- Apply a 53-entry [semantic spec](unbind-spec.md) that removes the behavioral micromanagement while preserving every useful capability (Opus 4.7 with thinking forced `{type: "enabled", budget_tokens: 32768}`, full tool surface, agent teams support)
 - Launch the resulting unbound build with the same kitty-tmux-shim machinery that stock Claude Code uses
 
 ## Disclaimer
