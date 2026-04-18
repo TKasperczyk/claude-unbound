@@ -10,7 +10,7 @@ This repo provides a pipeline to:
 - Extract and prettify the bundled JS
 - Inject a payload dumper so every API request is captured to disk for comparison
 - Apply a 53-entry [semantic spec](unbind-spec.md) that removes the behavioral micromanagement while preserving every useful capability (Opus 4.7 with thinking forced `{type: "enabled", budget_tokens: 32768}`, full tool surface, agent teams support)
-- Launch the resulting unbound build with the same kitty-tmux-shim machinery that stock Claude Code uses
+- Launch the resulting unbound build with optional kitty-tmux-shim support so agent teams work inside Kitty (shim not included; link in Prerequisites)
 
 ## Disclaimer
 
@@ -20,12 +20,13 @@ The resulting patched archives are derivative works of proprietary software; use
 
 ## Prerequisites
 
-- **Claude Code** installed (download via [claude.com/download](https://claude.com/download) or `npm install -g @anthropic-ai/claude-code`) with an active Max subscription for OAuth
+- **Claude Code** installed (download via [claude.com/download](https://claude.com/download) or `npm install -g @anthropic-ai/claude-code`) with an active Claude Pro or Max subscription for OAuth
 - **bun** on PATH -- for running the patched JS archive
 - **rg** (ripgrep) on PATH -- used by the LLM patcher
 - **js-beautify** on PATH -- `pnpm install -g js-beautify` (or npm)
-- **gh** or **curl** for the downloader to hit Anthropic's GCS bucket
+- **Python 3.10+** -- standard library only, no external packages
 - Linux or macOS (platform auto-detected; Windows users can adapt the shell scripts)
+- **Optional:** a `kitty-tmux-shim` executable on PATH -- only required if you want agent teams to work inside the Kitty terminal via the `claude-unbound` wrapper. This is a separate tool (not included in this repo) that translates tmux commands into `kitty @` remote-control calls so Claude Code's `TmuxBackend` thinks it's running inside tmux. Outside Kitty, or without the shim installed, the wrapper degrades gracefully without teams support.
 
 ## Quick start
 
@@ -49,8 +50,9 @@ The resulting patched archives are derivative works of proprietary software; use
 cp claude-app.pretty.v2.1.114.js claude-app.pretty.unbound.js
 
 # 6. Run it
-./claude-unbound "what's up?"
-#   or export CLAUDE_UNBOUND_JS=/path/to/your/archive.js
+./claude-unbound                         # interactive
+./claude-unbound -p "what's up?"         # single-shot print mode
+#   set CLAUDE_UNBOUND_JS=/path/to/your/archive.js to point at a different build
 ```
 
 ## Pipeline
@@ -68,7 +70,7 @@ cp claude-app.pretty.v2.1.114.js claude-app.pretty.unbound.js
   + context dump injected                     (payload → /tmp/claude-context-v<version>/)
           │ patch-unbound.py                  (LLM applies unbind-spec.md via CC subprocess)
           ▼
-  + 54 spec entries applied                   (behavioral restrictions stripped)
+  + 53 spec entries applied                   (behavioral restrictions stripped)
           │ cp to your chosen persistent name
           ▼
   claude-unbound wrapper                      (bun + kitty-tmux-shim for agent teams)
@@ -115,7 +117,7 @@ Uses a structural fingerprint (`let <VAR> = <fn>(<arg>);` followed by `<validato
 
 ### `patch-unbound.py`
 
-Spawns `claude` itself as a subprocess with the full [unbind-spec.md](unbind-spec.md) as a task prompt. Uses Claude Code's native Read/Grep/Edit/Bash tools and **OAuth via your Max subscription quota** (not pay-per-token API billing).
+Spawns `claude` itself as a subprocess with the full [unbind-spec.md](unbind-spec.md) as a task prompt. Uses Claude Code's native Read/Grep/Edit/Bash tools and **OAuth via your Claude Pro or Max subscription quota** (not pay-per-token API billing).
 
 ```bash
 ./patch-unbound.py claude-app.pretty.v2.1.115.js                      # default: stock claude
@@ -123,7 +125,7 @@ Spawns `claude` itself as a subprocess with the full [unbind-spec.md](unbind-spe
 ./patch-unbound.py --dry-run <file>                                   # print prompt, don't invoke
 ```
 
-Typical run: 10-15 minutes, ~35 tool-call batches, zero API billing (covered by your Max subscription). Reports per-entry status, verifies with `bun <file> --version` at category boundaries, ends with applied/skipped/failed summary.
+Typical run: 10-15 minutes, ~35 tool-call batches, zero API billing (covered by your Claude Pro or Max subscription). Reports per-entry status, verifies with `bun <file> --version` at category boundaries, ends with applied/skipped/failed summary.
 
 ### `unbind-spec.md`
 
@@ -135,11 +137,11 @@ The source of truth for what "unbound" means. 53 semantic edits across 17 catego
 
 Grouped by impact. Tier A (structural API parameters) forces thinking from `adaptive` to `{enabled, 32768}` and neuters the anti-reasoning system-reminder. Tier B-E rewrite the system prompt content (hard word limits, autonomy framing, defer-to-user rules, model-identity chatter). Tier F-O rewrite tool descriptions (anti-Bash preamble, Git Safety Protocol, forced commit/PR ritual, Trust-but-verify loop, BLOCKING REQUIREMENT skill invocation, etc). P covers the context-dump injection. Q covers the mascot color swap (red, so you can see at a glance whether you're running stock or unbound).
 
-Human-readable enough that a careful engineer can apply it by hand in 30-45 minutes; machine-readable enough that `patch-unbound.py` feeds it to Claude as a task prompt and gets 53/54 entries applied correctly on first pass.
+Human-readable enough that a careful engineer can apply it by hand in 30-45 minutes; machine-readable enough that `patch-unbound.py` feeds it to Claude as a task prompt and applies most entries correctly on first pass (expect one or two minor misses on tool-description prose that you can fix by hand).
 
 ### `claude-unbound`
 
-Launcher wrapper. Runs your built `.unbound.js` archive via `bun` with `--dangerously-skip-permissions`. When inside Kitty with remote control enabled, sets up the tmux shim so agent teams work. Outside Kitty (SSH, CI, scripts), degrades gracefully without teams support.
+Launcher wrapper. Runs your built `.unbound.js` archive via `bun` with `--dangerously-skip-permissions`. When inside Kitty with remote control enabled and a `kitty-tmux-shim` binary on PATH, sets up an agent-teams environment (see Prerequisites for what the shim is). Outside Kitty or without the shim, degrades gracefully without teams support.
 
 ```bash
 ./claude-unbound                                    # default: ~/Programming/claude-unbound/claude-app.pretty.unbound.js
@@ -178,7 +180,7 @@ If a grep check fails, the LLM patcher missed an entry -- apply manually via you
 - **Context dump path collisions.** The context dump injection writes to `/tmp/claude-context-v<version>/`. Running two different patches of the same semver back-to-back will interleave dumps -- clear `/tmp/claude-context-v<version>/` between runs or inspect by timestamp.
 - **OAuth credential rotation.** `~/.claude/.credentials.json` is shared across all Claude Code-family processes. If one refreshes the OAuth token, others running concurrently may briefly see `invalid_grant` -- retry or wait a few seconds.
 - **Agent tool's "Example usage" blocks.** The LLM patcher reliably removes the "Writing the prompt" sermon but may leave the two `<example>` blocks in the `Agent` tool description intact. That's ~400 extra tokens per request but doesn't restrict the model -- ignore or apply the deletion by hand if you care.
-- **Don't use the raw `anthropic` SDK for the patcher.** An earlier design used the Anthropic Python SDK which reads `ANTHROPIC_API_KEY` and bills pay-per-token from zero -- effectively double-charging since your Max subscription already covers the work. The current `patch-unbound.py` spawns Claude Code as a subprocess, which uses OAuth via the subscription.
+- **Don't use the raw `anthropic` SDK for the patcher.** An earlier design used the Anthropic Python SDK which reads `ANTHROPIC_API_KEY` and bills pay-per-token from zero -- effectively double-charging since your Claude Pro or Max subscription already covers the work. The current `patch-unbound.py` spawns Claude Code as a subprocess, which uses OAuth via the subscription.
 
 ## Philosophy
 
