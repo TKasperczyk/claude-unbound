@@ -193,7 +193,7 @@ When Anthropic adds a new restriction in a future version, classify it into one 
 
 ## Further reading
 
-- [`unbind-spec.md`](unbind-spec.md) -- the full 54-entry spec, the source of truth
+- [`unbind-spec.md`](unbind-spec.md) -- the full 53-entry spec, the source of truth
 - [`prompt-diff-2.1.98-to-2.1.114.md`](prompt-diff-2.1.98-to-2.1.114.md) -- detailed writeup comparing stable vs latest at the time of authoring, with every system-prompt and tool-description change classified
 - Theo Browne's video on Claude Code's regression (the hot-take that kicked this off)
 - Anthropic's [Commercial Terms of Service](https://www.anthropic.com/legal/commercial-terms) -- read before using
